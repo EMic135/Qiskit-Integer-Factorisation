@@ -7,6 +7,17 @@ from math import gcd as gcd
 
 class AdditionalGates(QuantumCircuit):
     def and_gate(self, a, b, r, ctrl=None, anc=None):
+        """applies "r = a AND b" to the current circuit
+
+        :param a: Qubit | Bool | Int. the "a" in "r = a AND b"
+        :param b: Qubit | Bool | Int. the "b" in "r = a AND b"
+        :param r: Qubit. the "r" in "r = a AND b"
+        :param ctrl: Qubit | None. controls if "a AND b" is written to "r"
+        :param anc: Qubit | QubitRegister | None. Ancilla qubit(s) if required/provided.
+
+        :raise TypeError: if "a" or "b" are not a Qubit|Bool|Int.
+
+        """
         if ctrl is None:
             if type(a) is Qubit:
                 if type(b) is Qubit:
@@ -43,6 +54,16 @@ class AdditionalGates(QuantumCircuit):
                 raise TypeError('a must be a Qubit, bool or int')
 
     def xor_gate(self, a, b, r, ctrl=None):
+        """
+        applies "r = a XOR b" to the current circuit
+
+        :param a: Qubit | Bool | Int. the "a" in "r = a XOR b"
+        :param b: Qubit | Bool | Int. the "b" in "r = a XOR b"
+        :param r: Qubit. the "r" in "r = a XOR b"
+        :param ctrl: Qubit | None. controls if "a XOR b" is written to "r"
+
+        :raise TypeError: if "a" or "b" are not a Qubit|Bool|Int.
+        """
         if ctrl is None:
             if type(a) is Qubit:
                 self.cx(a, r)
@@ -71,10 +92,29 @@ class AdditionalGates(QuantumCircuit):
                 raise TypeError('b must be a Qubit, bool or int')
 
     def or_gate(self, a, b, r, ctrl=None):
+        """
+        applies "r = a OR b" to the current circuit through an "and" and "xor" gate
+
+        :param a: Qubit | Bool | Int. the "a" in "r = a OR b"
+        :param b: Qubit | Bool | Int. the "b" in "r = a OR b"
+        :param r: Qubit. the "r" in "r = a OR b"
+        :param ctrl: Qubit | None. controls if "a OR b" is written to "r"
+
+        :raise TypeError: if "a" or "b" are not a Qubit|Bool|Int.
+        """
         self.and_gate(a, b, r, ctrl)
         self.xor_gate(a, b, r, ctrl)
 
     def copy_gate(self, a, b, ctrl=None):
+        """
+        applies "b = a XOR b" to the current circuit, which when "b=0" results in "b=a"
+
+        :param a: Qubit | Bool | Int. the "a" in "b = a XOR b"
+        :param b: Qubit. the "b" in "b = a XOR b"
+        :param ctrl: Qubit | None. controls if "a XOR b" is written to "b"
+
+        :raise TypeError: if "a" is not a Qubit|Bool|Int or "b" is not a Qubit.
+        """
         if ctrl is None:
             for i in range(len(a)):
                 if type(a[i]) is Qubit:
@@ -89,21 +129,50 @@ class AdditionalGates(QuantumCircuit):
                     if a[i]: self.cx(ctrl, b[i])
 
     def invert(self, a):
-        if type(a) is QuantumRegister:
+        """
+        inverts "a" such that all 1s go to 0s and 0s go to 1s
+
+        :param a: QubitRegister | Qubit | [Bool] | [Int]. the "a" in "b = a XOR b"
+        """
+        if type(a) is QuantumRegister or type(a) is Qubit:
             self.x(a)
         else:
             a = [1 - val for val in a]
         return a
 
     def carry(self, a, b, c, c_out, ctrl=None, anc=None):
+        """computes "c_out = (a+b+c>1)"
+
+        :param a: Qubit | Bool | Int. the "a" in "c_out = (a+b+c>1)"
+        :param b: Qubit | Bool | Int. the "b" in "c_out = (a+b+c>1)"
+        :param c: Qubit | Bool | Int. the "c" in "c_out = (a+b+c>1)"
+        :param c_out: Qubit. the "c_out" in "c_out = (a+b+c>1)"
+        :param ctrl: Qubit | None. controls if "(a+b+c>1)" is written to "c_out"
+        :param anc: Qubit | QubitRegister | None. Ancilla qubit(s) if required/provided.
+
+        :raise TypeError: if "a" or "b" are not a Qubit|Bool|Int.
+        """
         self.and_gate(a, b, c_out, ctrl, anc)
         self.and_gate(a, c, c_out, ctrl, anc)
         self.and_gate(c, b, c_out, ctrl, anc)
 
     def add_self(self, a, b, c, ctrl=None, anc=None):
-        """a=a+b"""
-        if len(c) != len(a) + 1 or len(c) != len(b) + 1:
-            raise ValueError('c must be 1 qubit larger than a and b')
+        """computes "a=a+b"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "a=a+b"
+        :param b: QubitRegister | [Qubit] | [Bool] | [Int]. the "b" in "a=a+b"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param ctrl: Qubit | None. controls if "a+b" is written to "a"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+
+        :raise ValueError: if "c" does not have at least 1 more qubit than "a" and "b"
+        :raise ValueError: if "a" and "b" are not equal sizes
+        """
+        if len(c) <= len(a) or len(c) <= len(b):
+            raise ValueError('c must be larger than a and b')
+        if len(a) != len(b):
+            raise ValueError('a must be the same size as b')
+
         for i in range(len(a)):
             self.carry(a[i], b[i], c[i], c[i + 1], anc = anc)
         for i in range(len(a)-1, -1, -1):
@@ -111,9 +180,22 @@ class AdditionalGates(QuantumCircuit):
             self.xor_gate(b[i], c[i], a[i], ctrl)
 
     def sub_self(self, a, b, c, ctrl=None, anc=None):
-        """a=a+b"""
-        if len(c) != len(a) + 1 or len(c) != len(b) + 1:
-            raise ValueError('c must be 1 qubit larger than a and b')
+        """computes "a=a-b"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "a=a-b"
+        :param b: QubitRegister | [Qubit] | [Bool] | [Int]. the "b" in "a=a-b"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param ctrl: Qubit | None. controls if "a-b" is written to "a"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+
+        :raise ValueError: if "c" does not have at least 1 more qubit than "a" and "b"
+        :raise ValueError: if "a" and "b" are not equal sizes
+        """
+        if len(c) <= len(a) or len(c) <= len(b):
+            raise ValueError('c must be larger than a and b')
+        if len(a) != len(b):
+            raise ValueError('a must be the same size as b')
+
         b = self.invert(b)
         self.x(c[0])
 
@@ -123,7 +205,23 @@ class AdditionalGates(QuantumCircuit):
         self.x(c[0])
 
     def geq(self, a, b, c, f, ctrl=None, anc=None):
-        """f=a>=b"""
+        """computes "f = a>=b"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "f = a>=b"
+        :param b: QubitRegister | [Qubit] | [Bool] | [Int]. the "b" in "f = a>=b"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param f: Qubit. the "f" in "f = a>=b"
+        :param ctrl: Qubit | None. controls if "a>=b" is written to "f"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+
+        :raise ValueError: if "c" does not have at least 1 more qubit than "a" and "b"
+        :raise ValueError: if "a" and "b" are not equal sizes
+        """
+        if len(c) <= len(a) or len(c) <= len(b):
+            raise ValueError('c must be larger than a and b')
+        if len(a) != len(b):
+            raise ValueError('a must be the same size as b')
+
         b = self.invert(b)
         self.x(c[0])
 
@@ -140,6 +238,24 @@ class AdditionalGates(QuantumCircuit):
         self.x(c[0])
 
     def add_mod_self(self, a, b, N, c, f, ctrl=None, anc=None):
+        """computes "a = a+b % N"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "a = a+b % N"
+        :param b: QubitRegister | [Qubit] | [Bool] | [Int]. the "b" in "a = a+b % N"
+        :param N: QubitRegister | [Qubit] | [Bool] | [Int]. the "N" in "a = a+b % N"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param f: Qubit. the flag qubit required whilst computing the operation
+        :param ctrl: Qubit | None. controls if "a+b % N" is written to "a"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+
+        :raise ValueError: if "c" does not have at least 1 more qubit than "a" and "b"
+        :raise ValueError: if "a" and "b" are not equal sizes
+        """
+        if len(c) <= len(a) or len(c) <= len(b):
+            raise ValueError('c must be larger than a and b')
+        if len(a) != len(b):
+            raise ValueError('a must be the same size as b')
+
         self.add_self(a, b, c, ctrl, anc=anc)
         self.geq(a, N, c, f, ctrl, anc=anc)
         self.sub_self(a, N, c, f, anc=anc)
@@ -148,7 +264,19 @@ class AdditionalGates(QuantumCircuit):
         self.add_self(a, b, c, ctrl, anc=anc)
 
     def const_mult_mod(self, a:QuantumRegister, b:int, N:int, c, r, f, ctrl=None, anc=None):
-        """r=ab%N"""
+        """computes "r = ab % N"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "r = ab % N"
+        :param b: Int. the "b" in "r = ab % N"
+        :param N: Int. the "N" in "r = ab % N"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param a: QubitRegister | [Qubit]. the "r" in "r = ab % N"
+        :param f: Qubit. the flag qubit required whilst computing the operation
+        :param ctrl: Qubit | None. controls if "ab % N" is written to "r"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+
+        :raise ValueError: if "ctrl" is not none and "anc" is None, there are not enough qubits
+        """
         if ctrl is not None:
             if anc is None:
                 raise ValueError('controlling mult mod requires 1 anc')
@@ -171,7 +299,17 @@ class AdditionalGates(QuantumCircuit):
                     self.ccx(ctrl, a[i], control)
 
     def const_mult_mod_self(self, a:QuantumRegister, b:int, N:int, c, acu1, f, ctrl=None, anc=None):
-        """a=ab%N"""
+        """computes "a = ab % N"
+
+        :param a: QubitRegister | [Qubit]. the "a" in "a = ab % N"
+        :param b: Int. the "b" in "a = ab % N"
+        :param N: Int. the "N" in "a = ab % N"
+        :param c: QubitRegister | [Qubit]. the carry qubits required whilst computing the operation
+        :param acu1: QubitRegister | [Qubit]. the accumulator qubits required whilst computing the operation
+        :param f: Qubit. the flag qubit required whilst computing the operation
+        :param ctrl: Qubit | None. controls if "ab % N" is written to "a"
+        :param anc: QubitRegister | [Qubit] | Qubit | None. Ancilla qubit(s) if required/provided.
+        """
         self.const_mult_mod(a, b, N, c, acu1, f, ctrl, anc)
         self.const_mult_mod(acu1, pow(b, -1, N), N, c, a, f, ctrl, anc)
         self.copy_gate(acu1, a, ctrl)
@@ -197,7 +335,7 @@ class AdditionalGates(QuantumCircuit):
 
 
 
-if __name__ == "__main__" and True: #Change to True to run tests
+if __name__ == "__main__":
     from qiskit import ClassicalRegister, transpile
     from qiskit_aer import AerSimulator
     import matplotlib.pyplot as plt
@@ -237,7 +375,11 @@ if __name__ == "__main__" and True: #Change to True to run tests
                 a=output[2]
                 b=output[1]
                 c=output[0]
-                print(f"ADD: {x}+{y}={goal}    a={a}:{a==goal}\n    b={b}:{b==y},c=0:{c==0}")
+                #print(f"ADD: {x}+{y}={goal}    a={a}:{a==goal}\n    b={b}:{b==y},c=0:{c==0}")
+                if a!=goal or b != y or c != 0:
+                    print(f"ADD FAILED: {x}+{y}={goal}    a={a}:{a==goal}\n    b={b}:{b==y},c=0:{c==0}")
+                    return None
+        print("ADD PASSED")
 
     def test_subself(n):
         for x in range(2 ** (n - 1)):
@@ -272,7 +414,11 @@ if __name__ == "__main__" and True: #Change to True to run tests
                 a=output[2]
                 b=output[1]
                 c=output[0]
-                print(f"SUB: {x}-{y}={goal}    a={a}:{a==goal}\n    b={y}:{b==y},c=0:{c==0}")
+                #print(f"SUB: {x}-{y}={goal}    a={a}:{a==goal}\n    b={y}:{b==y},c=0:{c==0}")
+                if a != goal or b != y or c != 0:
+                    print(f"SUB FAILED: {x}-{y}={goal}    a={a}:{a==goal}\n    b={y}:{b==y},c=0:{c==0}")
+                    return None
+        print("SUB PASSED")
 
     def test_geq(n):
         for x in range(2 ** (n - 1)):
@@ -311,7 +457,11 @@ if __name__ == "__main__" and True: #Change to True to run tests
                 b=output[2]
                 c=output[1]
                 f=output[0]
-                print(f"GEQ: {x}>={y}={goal}    f={f}:{f==goal}\n    a={a}:{a==x},b={b}:{b==y},c=0:{c==0}")
+                #print(f"GEQ: {x}>={y}={goal}    f={f}:{f==goal}\n    a={a}:{a==x},b={b}:{b==y},c=0:{c==0}")
+                if f != goal or a != x or b != y or c != 0:
+                    print(f"GEQ FAILED: {x}>={y}={goal}    f={f}:{f==goal}\n    a={a}:{a==x},b={b}:{b==y},c=0:{c==0}")
+                    return None
+        print("GEQ PASSED")
 
     def test_addmodself(n):
         N_val=2 ** (n - 1)
@@ -337,7 +487,7 @@ if __name__ == "__main__" and True: #Change to True to run tests
                     if (N_val >> i) & 1:
                         qc.x(N[i])
 
-                qc.addmod_self(a, b, N, c, f, anc=anc)
+                qc.add_mod_self(a, b, N, c, f, anc=anc)
 
                 qc.measure(a, a_out)
                 qc.measure(b, b_out)
@@ -354,7 +504,11 @@ if __name__ == "__main__" and True: #Change to True to run tests
                 a = output[3]
                 c = output[1]
                 f = output[0]
-                print(f"ACCMOD: {x}+{y}%{N_val}={goal}    a={a}:{a == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}")
+                #print(f"ADDMOD: {x}+{y}%{N_val}={goal}    a={a}:{a == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}")
+                if a != goal or c != 0 or f!=0:
+                    print(f"ADDMOD FAILED: {x}+{y}%{N_val}={goal}    a={a}:{a == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}")
+                    return None
+        print("ADDMOD PASSED")
 
     def test_multmod(n):
         for x in range(1,2 ** (n - 1)):
@@ -393,9 +547,13 @@ if __name__ == "__main__" and True: #Change to True to run tests
                 c = output[2]
                 r = output[1]
                 f = output[0]
-                print(f"MULTMOD: {x}*{y}%{N}={goal}    r={r}:{r == goal}\n    c=0:{c},f=0:{f}")
+                #print(f"MULTMOD: {x}*{y}%{N}={goal}    r={r}:{r == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}")
+                if r != goal or c != 0 or f != 0:
+                    print(f"MULTMOD FAILED: {x}*{y}%{N}={goal}    r={r}:{r == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}")
+                    return None
                 if x==y:
                     break
+        print("MULTMOD PASSED")
 
     def test_multmod_self(n):
         for x in range(1,2 ** (n - 1)):
@@ -435,49 +593,19 @@ if __name__ == "__main__" and True: #Change to True to run tests
                     c = output[2]
                     f = output[1]
                     r1 = output[0]
-                    print(f"MULTMOD: {x}*{y}%{N}={goal}    a={a}:{a == goal}\n    c={c}, f={f}, r1={r1}")
-                    if x==y:
+                    #print(f"MULTMOD: {x}*{y}%{N}={goal}    a={a}:{a == goal}\n    c={c}, f={f}, r1={r1}")
+                    if a != goal or c != 0 or f != 0:
+                        print( f"MULTMOD FAILED: {x}*{y}%{N}={goal}    a={a}:{a == goal}\n    c=0:{c==0}, c={c}\n    f=0:{f==0}, f={f}\n    r1=0:{r1==0}, r1={r1}")
+                        return None
+                    if x == y:
                         break
+        print("MULTMOD PASSED")
 
+    print("BEGINNING TESTS")
     n=4
-    #test_addself(n)
-    #test_subself(n)
-    #test_geq(n)
-    #test_addmodself(n)
-    #test_multmod(n)
+    test_addself(n)
+    test_subself(n)
+    test_geq(n)
+    test_addmodself(n)
+    test_multmod(n)
     test_multmod_self(n)
-
-if __name__ == "__main__" and True:
-    from math import ceil, log2
-    from qiskit.circuit.library import QFTGate
-
-    a = 2
-    N = 15
-    if gcd(a, N) > 1:
-        print(f"Error: gcd({a},{N}) > 1")
-        quit()
-
-    k = 2 * ceil(log2(N))
-    b_list = [pow(a, 2 ** val, N) for val in range(k)]
-
-    work_bits = k // 2
-    phase_bits = k
-
-    Phase_Register = QuantumRegister(phase_bits, "P")
-    Work_Register = QuantumRegister(work_bits, "W")
-    Carry = QuantumRegister(work_bits + 1, "C")
-    Accumulator1 = QuantumRegister(work_bits, "A1")
-    Flag = QuantumRegister(1, "F")
-    Ancilla = QuantumRegister(1, "anc")
-    meas = ClassicalRegister(phase_bits, "meas")
-    qc = AdditionalGates(Phase_Register, Work_Register, Carry, Accumulator1, Flag, Ancilla, meas)
-    qc.h(Phase_Register)
-    qc.x(Work_Register[0])
-
-    for index in range(len(b_list)):
-        b = b_list[index]
-        if b > 1:
-            qc.const_mult_mod_self(Work_Register, b, N, Carry, Accumulator1, Flag, Phase_Register[index], Ancilla)
-
-    qc.compose(QFTGate(phase_bits).inverse(), Phase_Register, inplace=True)
-    qc.measure(Phase_Register, meas)
